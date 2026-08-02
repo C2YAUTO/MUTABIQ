@@ -130,14 +130,38 @@ function drawCertificateOfOrigin(
     doc.setFontSize(8)
     doc.text(lines, x, y)
   }
+  const arabic = (text: string, right: number, y: number, width = 32, height = 4) => {
+    if (typeof document === "undefined") return
+    const canvas = document.createElement("canvas")
+    canvas.width = Math.max(320, Math.round(width * 12))
+    canvas.height = 52
+    const ctx = canvas.getContext("2d")
+    if (!ctx) return
+    ctx.clearRect(0, 0, canvas.width, canvas.height)
+    ctx.fillStyle = "#111827"
+    ctx.font = "700 30px Arial, sans-serif"
+    ctx.textAlign = "right"
+    ctx.textBaseline = "middle"
+    ctx.direction = "rtl"
+    ctx.fillText(text, canvas.width - 4, canvas.height / 2)
+    doc.addImage(canvas.toDataURL("image/png"), "PNG", right - width, y - height + 0.5, width, height)
+  }
+
+  // Visible safeguard: this bilingual page is a non-official sample.
+  doc.setTextColor(205, 45, 45)
+  doc.setFont("helvetica", "bold")
+  doc.setFontSize(30)
+  doc.text("SAMPLE / NON OFFICIAL", (mx + rightEdge) / 2, pageH / 2, { align: "center", angle: 35 })
 
   // Left column: exporter + consignee boxes
   const leftW = midX - mx
   doc.rect(mx, top, leftW, 40)
   label("1. EXPORTER (NAME, ADDRESS, COUNTRY)", mx + 2, top + 5)
+  arabic("المصدر: الاسم والعنوان والدولة", midX - 2, top + 5, 35)
   val([cert.exporterName || "—", ...doc.splitTextToSize(cert.exporterAddress || "", leftW - 6)], mx + 2, top + 10)
   doc.rect(mx, top + 40, leftW, 40)
   label("2. CONSIGNEE (NAME, ADDRESS, COUNTRY)", mx + 2, top + 45)
+  arabic("المرسل إليه: الاسم والعنوان والدولة", midX - 2, top + 45, 39)
   val(
     [cert.consigneeName || "—", ...doc.splitTextToSize(cert.consigneeAddress || "", leftW - 6), cert.destinationCountry || ""],
     mx + 2,
@@ -147,46 +171,57 @@ function drawCertificateOfOrigin(
   // Right column header
   const rightW = rightEdge - midX
   label("UNITED ARAB EMIRATES", midX + 2, top + 5)
+  arabic("دولة الإمارات العربية المتحدة", rightEdge - 2, top + 5, 37)
   drawDubaiChamberMark(doc, rightEdge - 2, top + 16)
   doc.setTextColor(...C_NAVY)
   doc.setFont("helvetica", "bold")
   doc.setFontSize(11)
-  doc.text("Certificate of Origin", midX + rightW / 2, top + 24, { align: "center" })
+  doc.text("Certificate of Origin", midX + rightW / 2 - 13, top + 24, { align: "center" })
+  arabic("شهادة المنشأ", rightEdge - 2, top + 24, 24)
   doc.rect(midX, top + 27, rightW, 9)
   doc.setTextColor(...C_DARK)
   doc.setFontSize(8)
   doc.text(`Certificate No. ${cert.originCertNumber || "—"}`, midX + 2, top + 32.5)
+  arabic("رقم الشهادة", midX + 42, top + 32.5, 21)
   doc.text(`Date ${cert.originCertDate || "—"}`, rightEdge - 2, top + 32.5, { align: "right" })
+  arabic("تاريخ الإصدار", rightEdge - 2, top + 37, 22)
   doc.setFont("helvetica", "bold")
   doc.setFontSize(10)
   doc.text("ORIGINAL", midX + 2, top + 42)
+  arabic("أصلية", midX + 42, top + 42, 14)
 
   // Transport / destination grid
   let gy = top + 80
   const rowH = 11
-  const rows: [string, string, string, string][] = [
-    ["3. Means of Transport", cert.meansOfTransport || "—", "6. Country of Final Destination", cert.destinationCountry || "—"],
-    ["4. Estimated Date of Departure", cert.departureDate || "—", "7. Invoice No. and Date", `${cert.invoiceNumber || "—"}${cert.invoiceDate ? ", " + cert.invoiceDate : ""}`],
-    ["5. Port of Discharge", cert.portOfDischarge || "—", "8. Country of Origin of Goods", (cert.countryOfOrigin || "—").toUpperCase()],
+  const rows: [string, string, string, string, string, string][] = [
+    ["3. Means of Transport", "وسيلة النقل", cert.meansOfTransport || "—", "6. Country of Final Destination", "بلد الوجهة الأخيرة", cert.destinationCountry || "—"],
+    ["4. Estimated Date of Departure", "التاريخ المتوقع للمغادرة", cert.departureDate || "—", "7. Invoice No. and Date", "رقم وتاريخ الفاتورة", `${cert.invoiceNumber || "—"}${cert.invoiceDate ? ", " + cert.invoiceDate : ""}`],
+    ["5. Port of Discharge", "ميناء / مكان التفريغ", cert.portOfDischarge || "—", "8. Country of Origin of Goods", "بلد منشأ البضاعة", (cert.countryOfOrigin || "—").toUpperCase()],
   ]
-  for (const [l1, v1, l2, v2] of rows) {
+  for (const [l1, ar1, v1, l2, ar2, v2] of rows) {
     doc.rect(mx, gy, leftW, rowH)
     doc.rect(midX, gy, rightW, rowH)
     label(l1, mx + 2, gy + 4)
+    arabic(ar1, midX - 2, gy + 4, 31)
     val([v1], mx + 2, gy + 9)
     label(l2, midX + 2, gy + 4)
+    arabic(ar2, rightEdge - 2, gy + 4, 31)
     val([v2], midX + 2, gy + 9)
     gy += rowH
   }
 
   // Description box
   const descTop = gy
-  const descH = 95
+  const descH = 82
   doc.rect(mx, descTop, rightEdge - mx, descH)
   doc.line(midX + 30, descTop, midX + 30, descTop + descH)
   const col11 = midX + 30
-  label("9. Marks & Numbers   10. No. and Kind of Packages, Description of Goods", mx + 2, descTop + 5)
+  label("9. Marks & Numbers", mx + 2, descTop + 5)
+  arabic("العلامات والأرقام", mx + 46, descTop + 5, 25)
+  label("10. Packages and description of goods", mx + 50, descTop + 5)
+  arabic("رقم ونوع الطرود وبيان البضاعة", col11 - 2, descTop + 5, 39)
   label("11. Quantity & Unit", col11 + 2, descTop + 5)
+  arabic("الكمية والوحدة", rightEdge - 2, descTop + 5, 25)
   val(vehicleDescLines(cert), mx + 2, descTop + 13)
   val(["1 Unit"], col11 + 2, descTop + 13)
   doc.setTextColor(...C_GRAY)
@@ -195,31 +230,36 @@ function drawCertificateOfOrigin(
   doc.text("As per the attached invoice", (mx + col11) / 2, descTop + descH / 2, { align: "center" })
   doc.text("--- End of Description ---", (mx + col11) / 2, descTop + descH / 2 + 5, { align: "center" })
 
-  // Certification block
+  // Certification block: bilingual text above, seals in a dedicated lower area.
   const certTop = descTop + descH
-  doc.rect(mx, certTop, rightEdge - mx, 46)
+  const certH = 59
+  doc.rect(mx, certTop, rightEdge - mx, certH)
   label("12. CERTIFICATION BY THE COMPETENT AUTHORITY", mx + 2, certTop + 5)
+  arabic("تصديق جهة الإصدار", rightEdge - 2, certTop + 5, 30)
   doc.setTextColor(...C_DARK)
   doc.setFont("helvetica", "normal")
-  doc.setFontSize(7.5)
+  doc.setFontSize(7)
   doc.text(
     doc.splitTextToSize(
-      "We hereby certify that evidence has been produced to satisfy us that the goods specified above originate in / were processed in the country shown in box 8. This Certificate is issued and certified to the best of our knowledge and belief to be correct.",
-      (rightEdge - mx) / 2 - 6,
+      "We certify that the information supplied for this sample indicates that the goods originate in, or were processed in, the country shown in box 8. This non-official sample is provided for dossier presentation only.",
+      (rightEdge - mx) / 2 - 8,
     ),
     mx + 2,
     certTop + 11,
   )
-  // Official Dubai Chamber and ICC Certificate of Origin seals.
+  arabic("تشهد هذه النسخة التجريبية بأن بيانات البضاعة تشير إلى بلد المنشأ الموضح في الخانة رقم 8.", rightEdge - 2, certTop + 12, 77, 5)
+  arabic("هذه الصفحة نموذج غير رسمي ومخصصة لعرض ملف المستندات فقط.", rightEdge - 2, certTop + 19, 67, 5)
+
+  const sealCenterY = certTop + 41
   if (dubaiChamberSeal) {
     const h = 25
     const w = h * dubaiChamberSeal.ar
-    doc.addImage(dubaiChamberSeal.data, "PNG", mx + 55 - w / 2, certTop + 20, w, h)
+    doc.addImage(dubaiChamberSeal.data, "PNG", mx + 47 - w / 2, sealCenterY - h / 2, w, h)
   }
   if (iccOriginSeal) {
     const h = 27
     const w = h * iccOriginSeal.ar
-    doc.addImage(iccOriginSeal.data, "PNG", rightEdge - 25 - w / 2, certTop + 17, w, h)
+    doc.addImage(iccOriginSeal.data, "PNG", rightEdge - 38 - w / 2, sealCenterY - h / 2, w, h)
   }
 
   // Footer
