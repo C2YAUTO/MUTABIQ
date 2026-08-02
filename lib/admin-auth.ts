@@ -1,7 +1,8 @@
 import { cookies } from "next/headers"
 import { createHmac, timingSafeEqual } from "crypto"
 
-const COOKIE_NAME = "admin_session"
+// Version the cookie name to invalidate any previously issued admin sessions.
+const COOKIE_NAME = "admin_session_v2"
 
 /**
  * Read an env var and normalise it: trim whitespace and strip a single layer
@@ -51,7 +52,7 @@ const SESSION_COOKIE_OPTIONS = {
   secure: true,
   sameSite: "none" as const,
   path: "/",
-  maxAge: 60 * 60 * 8, // 8 hours
+  // No maxAge: the admin session expires when the browser is closed.
 }
 
 /** Cookie name + signed value + options, for setting directly on a Response. */
