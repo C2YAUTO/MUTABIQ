@@ -2,6 +2,7 @@
 
 import { useRef, useState, useTransition } from "react"
 import { createCertificate, updateCertificate, deleteCertificate } from "@/app/actions/certificate"
+import { decodeVin } from "@/app/actions/vin"
 import { Button } from "@/components/ui/button"
 import type { Certificate } from "@/lib/db/schema"
 import { Check, ExternalLink, Trash2, ArrowLeft, ScanLine, Loader2, AlertCircle } from "lucide-react"
@@ -178,95 +179,29 @@ export function AdminEditForm({ cert }: { cert: Certificate | null }) {
     setDecoding(true)
     setDecodeMsg(null)
     try {
-      const res = await fetch(
-        `https://vpic.nhtsa.dot.gov/api/vehicles/DecodeVinValues/${encodeURIComponent(code)}?format=json`,
-      )
-      const data = await res.json()
-      const r = data?.Results?.[0]
-      if (!r) throw new Error("no result")
+      const result = await decodeVin(code)
 
-      const make = r.Make ? titleCase(r.Make) : ""
-      const model = r.Model ? titleCase(r.Model) : ""
-      const year = r.ModelYear || ""
-      const filled: string[] = []
-
-      setField("vin", code)
-
-      // Always mark the certificate as valid and assign a fresh random CCR number.
-      setField("status", "Valid")
-      const randomCcr = String(Math.floor(100000 + Math.random() * 900000))
-      setField("ccrNumber", randomCcr)
-      filled.push("status (Valid)", `CCR (${randomCcr})`)
-
-      // Pre-fill the standard GSO technical regulations list.
-      setField("techRegulations", DEFAULT_GSO_REGULATIONS)
-      filled.push("GSO regulations")
-
-      if (make) {
-        setField("brand", make)
-        setField("manufacturer", r.Manufacturer ? titleCase(r.Manufacturer) : make)
-        filled.push("brand")
-      }
-      if (model) {
-        setField("model", model)
-        filled.push("model")
-      }
-      if (make || model) {
-        setField("vehicleType", [make, model].filter(Boolean).join(" ").toUpperCase())
-      }
-      if (year) {
-        setField("modelYear", String(year))
-        filled.push("year")
-      }
-      if (r.BodyClass) setField("vehicleCategory", r.BodyClass)
-      if (r.Doors) setField("numDoors", String(r.Doors))
-      if (r.Seats) setField("numSeats", String(r.Seats))
-      if (r.PlantCountry) setField("countryOfProduction", titleCase(r.PlantCountry))
-      if (r.FuelTypePrimary) setField("fuelType", titleCase(r.FuelTypePrimary))
-      if (r.EngineCylinders) setField("numberOfCylinders", String(r.EngineCylinders))
-      if (r.DisplacementL) setField("engineCapacity", `${Number(r.DisplacementL).toFixed(1)} L`)
-
-      // Look up the manufacturer's registered address via its ManufacturerId.
-      if (r.ManufacturerId) {
-        try {
-          const mRes = await fetch(
-            `https://vpic.nhtsa.dot.gov/api/vehicles/GetManufacturerDetails/${encodeURIComponent(
-              String(r.ManufacturerId),
-            )}?format=json`,
-          )
-          const m = (await mRes.json())?.Results?.[0]
-          if (m) {
-            const parts = [
-              m.Address,
-              m.Address2,
-              [m.City, m.StateProvince].filter(Boolean).join(", "),
-              m.PostalCode,
-              m.Country ? titleCase(m.Country.replace(/\s*\(.*\)/, "")) : "",
-            ]
-              .map((p: string | null) => (p ? String(p).trim() : ""))
-              .filter((p) => p && p.toLowerCase() !== "null")
-            const address = parts.join("\n")
-            if (address) {
-              setField("manufacturerAddress", address)
-              filled.push("manufacturer address")
-            }
-          }
-        } catch {
-          // Address lookup is best-effort; ignore failures.
-        }
-      }
-
-      if (filled.length === 0) {
+      if (!result.ok || !result.fields) {
         setDecodeMsg({
           type: "err",
-          text: "VIN recognized but no usable data. Please fill in the fields manually.",
+          text: result.error ?? "Could not decode this VIN. Fill in the fields manually.",
         })
-      } else {
-        setDecodeMsg({
-          type: "ok",
-          text: `Pre-filled: ${filled.join(", ")}. Review and complete the remaining technical fields.`,
-        })
+        return
       }
+
+      // Apply every field returned by the Vincario mapping.
+      for (const [name, value] of Object.entries(result.fields)) {
+        setField(name as keyof Certificate, value)
+      }
+
+      // Always pre-fill the standard GSO technical regulations list.
+      setField("techRegulations", DEFAULT_GSO_REGULATIONS)
+
+      const filled = [...(result.filled ?? []), "GSO regulations"]
+      setDecodeMsg({
+        type: "ok",
+        text: `Pre-filled: ${filled.join(", ")}. Review and complete the remaining technical fields.`,
+      })
     } catch {
       setDecodeMsg({
         type: "err",
