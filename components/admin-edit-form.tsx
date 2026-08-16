@@ -8,14 +8,6 @@ import type { Certificate } from "@/lib/db/schema"
 import { Check, ExternalLink, Trash2, ArrowLeft, ScanLine, Loader2, AlertCircle } from "lucide-react"
 import Link from "next/link"
 
-/** Convert an ALL-CAPS or lowercase string to Title Case (e.g. "SUZUKI" -> "Suzuki"). */
-function titleCase(s: string) {
-  return s
-    .toLowerCase()
-    .replace(/\b\w/g, (c) => c.toUpperCase())
-    .trim()
-}
-
 /** Standard GSO technical regulations list used on GCC conformity certificates. */
 const DEFAULT_GSO_REGULATIONS =
   "Will satisfy the GSO Technical Regulations Nos: 34:2007, 35:2007, 36:2005, 37:2012, 38:2005, 39:2005, 40:2011, 42:2015, 48:1984, 51:2007, 52:2007, 53:2007, 95:1988, 97:1988, 98:1988, 99:1988, 135:2007, 136:2007, 209:1994, 419:1994, 420:1994, 421:2005, 422:2005, 105:2000, 130:2000, 150:2010, 158:2002, 164:2002, 167:2003, 168:2003, 182:2003, 162:2003, 178:2000, 178:2010, 178:2006, 178:2008, 184:2006, GSO ISO 1585:2008, GSO ISO 3537:2008, GSO ISO 3538:1997, GSO ECE 13H:2012, GSO ECE 13H-3:2012, GSO ECE 13H-4:2012, GSO ECE 13H-6:2012 and the standards in the country of origin accepted by GSO in the case that no GSO technical regulations and standards are available."
