@@ -108,6 +108,7 @@ export async function decodeVin(rawVin: string): Promise<DecodedVin> {
   set("fuelVehicleClass", "Passenger car", "vehicle class")
   set("feRating", "Excellent", "rating")
   set("ecallSystem", "Provided", "eCall SOS")
+  set("airIntake", "Regular", "air intake")
 
   const make = get("Make")
   const model = get("Model")
