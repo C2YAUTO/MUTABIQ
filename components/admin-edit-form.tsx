@@ -110,7 +110,6 @@ const FIELD_GROUPS: { title: string; fields: Field[] }[] = [
     title: "Validity",
     fields: [
       { name: "issueDate", label: "Issue date" },
-      { name: "expiryDate", label: "Expiry date" },
     ],
   },
   {
