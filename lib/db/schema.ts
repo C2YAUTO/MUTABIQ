@@ -1,4 +1,14 @@
-import { pgTable, serial, text, timestamp } from "drizzle-orm/pg-core"
+import { pgTable, serial, text, timestamp, integer, boolean } from "drizzle-orm/pg-core"
+
+// One-time login codes for admin two-factor authentication (sent by email).
+export const adminLoginCode = pgTable("admin_login_code", {
+  id: serial("id").primaryKey(),
+  codeHash: text("code_hash").notNull(),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  attempts: integer("attempts").notNull().default(0),
+  consumed: boolean("consumed").notNull().default(false),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+})
 
 export const certificate = pgTable("certificate", {
   id: serial("id").primaryKey(),

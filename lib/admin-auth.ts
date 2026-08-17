@@ -1,7 +1,13 @@
 import { cookies } from "next/headers"
-import { createHmac, timingSafeEqual } from "crypto"
+import { createHmac, timingSafeEqual, randomInt } from "crypto"
+import { db } from "@/lib/db"
+import { adminLoginCode } from "@/lib/db/schema"
+import { eq } from "drizzle-orm"
 
 const COOKIE_NAME = "admin_session"
+const PENDING_COOKIE_NAME = "admin_2fa_pending"
+const CODE_TTL_MS = 10 * 60 * 1000 // 10 minutes
+const MAX_CODE_ATTEMPTS = 5
 
 /**
  * Read an env var and normalise it: trim whitespace and strip a single layer
@@ -74,4 +80,98 @@ export async function isAdminAuthenticated() {
   const token = cookieStore.get(COOKIE_NAME)?.value
   if (!token) return false
   return safeEqual(token, expectedToken())
+}
+
+/* -------------------------------------------------------------------------- */
+/* Two-factor authentication (one-time code by email)                          */
+/* -------------------------------------------------------------------------- */
+
+const PENDING_COOKIE_OPTIONS = {
+  httpOnly: true,
+  secure: true,
+  sameSite: "none" as const,
+  path: "/",
+  maxAge: 10 * 60, // matches the code TTL
+}
+
+function hashCode(code: string) {
+  return createHmac("sha256", getSecret()).update(`2fa:${code}`).digest("hex")
+}
+
+// Sign the pending-login row id so the client can't forge or swap it.
+function signPending(id: number) {
+  const sig = createHmac("sha256", getSecret()).update(`pending:${id}`).digest("hex")
+  return `${id}.${sig}`
+}
+
+function verifyPendingValue(value: string): number | null {
+  const [rawId, sig] = value.split(".")
+  const id = Number(rawId)
+  if (!rawId || !sig || !Number.isInteger(id)) return null
+  const expected = createHmac("sha256", getSecret()).update(`pending:${id}`).digest("hex")
+  if (!safeEqual(sig, expected)) return null
+  return id
+}
+
+/**
+ * Create a fresh one-time code, store its hash in the database, and set a
+ * signed pending cookie that links this browser to that code row.
+ * Returns the plaintext code (to email) — it is never stored in the clear.
+ */
+export async function startTwoFactor(): Promise<string> {
+  const code = String(randomInt(0, 1_000_000)).padStart(6, "0")
+  const expiresAt = new Date(Date.now() + CODE_TTL_MS)
+  const [row] = await db
+    .insert(adminLoginCode)
+    .values({ codeHash: hashCode(code), expiresAt })
+    .returning({ id: adminLoginCode.id })
+
+  const cookieStore = await cookies()
+  cookieStore.set(PENDING_COOKIE_NAME, signPending(row.id), PENDING_COOKIE_OPTIONS)
+  return code
+}
+
+export async function hasPendingTwoFactor(): Promise<boolean> {
+  const cookieStore = await cookies()
+  const value = cookieStore.get(PENDING_COOKIE_NAME)?.value
+  if (!value) return false
+  return verifyPendingValue(value) !== null
+}
+
+export async function clearPendingTwoFactor() {
+  const cookieStore = await cookies()
+  cookieStore.delete(PENDING_COOKIE_NAME)
+}
+
+/**
+ * Verify the submitted code against the pending login row.
+ * Returns "ok" on success, otherwise a failure reason.
+ */
+export async function verifyTwoFactorCode(
+  submitted: string,
+): Promise<"ok" | "expired" | "invalid" | "no-pending"> {
+  const cookieStore = await cookies()
+  const value = cookieStore.get(PENDING_COOKIE_NAME)?.value
+  if (!value) return "no-pending"
+  const id = verifyPendingValue(value)
+  if (id === null) return "no-pending"
+
+  const [row] = await db.select().from(adminLoginCode).where(eq(adminLoginCode.id, id)).limit(1)
+  if (!row || row.consumed) return "no-pending"
+
+  if (row.expiresAt.getTime() < Date.now() || row.attempts >= MAX_CODE_ATTEMPTS) {
+    await db.update(adminLoginCode).set({ consumed: true }).where(eq(adminLoginCode.id, id))
+    return "expired"
+  }
+
+  const code = submitted.trim()
+  const matches = code.length === 6 && safeEqual(hashCode(code), row.codeHash)
+  if (!matches) {
+    await db.update(adminLoginCode).set({ attempts: row.attempts + 1 }).where(eq(adminLoginCode.id, id))
+    return "invalid"
+  }
+
+  // Success: burn the code so it can't be reused.
+  await db.update(adminLoginCode).set({ consumed: true }).where(eq(adminLoginCode.id, id))
+  return "ok"
 }
