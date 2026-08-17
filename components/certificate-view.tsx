@@ -66,8 +66,14 @@ export function CertificateView({ cert, qrDataUrl }: { cert: Certificate; qrData
         <Section title="Approval">
           <Row label="CCR Number" value={cert.ccrNumber} />
           <Row label="Approved On" value={cert.issueDate} />
-          <Row label="Manufacturer" value={cert.manufacturer} />
         </Section>
+      </div>
+
+      {/* Vehicle brand + model */}
+      <div className="mb-6 rounded-lg bg-secondary px-6 py-8 text-center">
+        <p className="text-xl font-semibold uppercase tracking-wide text-secondary-foreground text-balance">
+          {[cert.brand, cert.model].filter(Boolean).join(" ")}
+        </p>
       </div>
 
       <div className="grid gap-6 md:grid-cols-2">
