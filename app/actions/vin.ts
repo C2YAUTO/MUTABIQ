@@ -103,6 +103,12 @@ export async function decodeVin(rawVin: string): Promise<DecodedVin> {
   const randomCcr = String(Math.floor(100000 + Math.random() * 900000))
   set("ccrNumber", randomCcr, `CCR (${randomCcr})`)
 
+  // Fixed default values applied on every decode.
+  set("certificateType", "Motor vehicles", "certificate type")
+  set("fuelVehicleClass", "Passenger car", "vehicle class")
+  set("feRating", "Excellent", "rating")
+  set("ecallSystem", "Provided", "eCall SOS")
+
   const make = get("Make")
   const model = get("Model")
   const year = get("Model Year")

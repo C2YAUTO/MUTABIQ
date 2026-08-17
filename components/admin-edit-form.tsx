@@ -24,7 +24,6 @@ const FIELD_GROUPS: { title: string; fields: Field[] }[] = [
       { name: "manufacturer", label: "Manufacturer" },
       { name: "brand", label: "Brand (for the logo, e.g. Suzuki)" },
       { name: "manufacturerAddress", label: "Manufacturer address", type: "textarea" },
-      { name: "applicant", label: "Applicant" },
     ],
   },
   {
