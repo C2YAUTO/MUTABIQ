@@ -12,20 +12,24 @@ function maskVin(vin: string) {
 function Row({ label, value }: { label: string; value: string }) {
   if (!value) return null
   return (
-    <div className="flex flex-row items-center gap-4 border-b border-border py-3 last:border-0">
-      <dt className="w-1/2 text-sm font-medium text-muted-foreground">{label}</dt>
-      <dd className="w-1/2 text-sm font-semibold text-foreground text-pretty">{value}</dd>
+    <div className="flex flex-row items-stretch gap-1">
+      <dt className="flex w-1/2 items-center bg-muted px-4 py-3 text-sm font-medium text-muted-foreground">
+        {label}
+      </dt>
+      <dd className="flex w-1/2 items-center bg-muted/40 px-4 py-3 text-sm font-semibold text-foreground text-pretty">
+        {value}
+      </dd>
     </div>
   )
 }
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <section className="rounded-lg border border-border bg-card">
-      <h2 className="border-b border-border bg-secondary px-5 py-3 text-sm font-semibold text-secondary-foreground">
+    <section className="overflow-hidden rounded-lg border border-border bg-card">
+      <h2 className="bg-secondary px-5 py-3 text-sm font-semibold text-secondary-foreground">
         {title}
       </h2>
-      <dl className="px-5 py-2">{children}</dl>
+      <dl className="flex flex-col gap-1 p-1">{children}</dl>
     </section>
   )
 }
@@ -81,7 +85,6 @@ export function CertificateView({ cert, qrDataUrl }: { cert: Certificate; qrData
         <Section title="General information">
           <Row label="Certificate type" value={cert.certificateType} />
           <Row label="Manufacturer" value={cert.manufacturer} />
-          <Row label="Manufacturer address" value={cert.manufacturerAddress} />
           <Row label="Manufacturer reference" value={cert.manufacturerRef} />
           <Row label="Country of origin" value={cert.countryOfOrigin} />
           <Row label="Country of production" value={cert.countryOfProduction} />
