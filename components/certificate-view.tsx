@@ -127,10 +127,6 @@ export function CertificateView({ cert, qrDataUrl }: { cert: Certificate; qrData
           <Row label="Rating" value={cert.feRating} />
         </Section>
 
-        <Section title="Technical regulations">
-          <Row label="Regulations" value={cert.techRegulations} />
-        </Section>
-
         <Section title="Validity">
           <Row label="Issue date" value={cert.issueDate} />
         </Section>
