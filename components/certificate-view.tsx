@@ -2,6 +2,13 @@ import Image from "next/image"
 import { CheckCircle2 } from "lucide-react"
 import type { Certificate } from "@/lib/db/schema"
 
+/** Hide the last 5 characters of a VIN for privacy (e.g. "MA3JJC74...S12345" -> "MA3JJC74...S*****"). */
+function maskVin(vin: string) {
+  if (!vin) return ""
+  if (vin.length <= 5) return "*".repeat(vin.length)
+  return vin.slice(0, -5) + "*".repeat(5)
+}
+
 function Row({ label, value }: { label: string; value: string }) {
   if (!value) return null
   return (
@@ -48,21 +55,19 @@ export function CertificateView({ cert, qrDataUrl }: { cert: Certificate; qrData
         </div>
       </div>
 
-      {/* Status + CCR */}
-      <div className="mb-6 flex flex-col gap-4 sm:flex-row">
-        <div className="flex flex-1 items-center gap-3 rounded-lg border border-green-600 bg-green-50 px-5 py-4">
-          <CheckCircle2 className="h-8 w-8 shrink-0 text-green-600" aria-hidden="true" />
-          <div>
-            <p className="text-xs text-green-700">Status</p>
-            <p className="text-lg font-bold text-green-700">Valid</p>
-          </div>
-        </div>
-        <div className="flex flex-1 items-center gap-3 rounded-lg border border-border bg-card px-5 py-4">
-          <div>
-            <p className="text-xs text-muted-foreground">Certificate number (CCR)</p>
-            <p className="text-lg font-bold text-foreground">{cert.ccrNumber || "—"}</p>
-          </div>
-        </div>
+      {/* Approval banner */}
+      <div className="mb-6 flex items-center gap-3 rounded-lg border border-green-600 bg-green-50 px-5 py-4">
+        <CheckCircle2 className="h-6 w-6 shrink-0 text-green-600" aria-hidden="true" />
+        <p className="text-lg font-semibold text-green-700">This certificate has been approved.</p>
+      </div>
+
+      {/* CCR + Approved On */}
+      <div className="mb-6">
+        <Section title="Approval">
+          <Row label="CCR Number" value={cert.ccrNumber} />
+          <Row label="Approved On" value={cert.issueDate} />
+          <Row label="Manufacturer" value={cert.manufacturer} />
+        </Section>
       </div>
 
       <div className="grid gap-6 md:grid-cols-2">
@@ -90,7 +95,7 @@ export function CertificateView({ cert, qrDataUrl }: { cert: Certificate; qrData
         </Section>
 
         <Section title="Identification & engine">
-          <Row label="VIN" value={cert.vin} />
+          <Row label="VIN" value={maskVin(cert.vin)} />
           <Row label="Engine number" value={cert.engineNumber} />
           <Row label="Fuel type" value={cert.fuelType} />
           <Row label="Number of cylinders" value={cert.numberOfCylinders} />
@@ -125,10 +130,6 @@ export function CertificateView({ cert, qrDataUrl }: { cert: Certificate; qrData
           <Row label="Vehicle class" value={cert.fuelVehicleClass} />
           <Row label="CAFE combined" value={cert.feCafeCombined} />
           <Row label="Rating" value={cert.feRating} />
-        </Section>
-
-        <Section title="Validity">
-          <Row label="Issue date" value={cert.issueDate} />
         </Section>
       </div>
 
