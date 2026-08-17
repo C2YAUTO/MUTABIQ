@@ -12,9 +12,9 @@ function maskVin(vin: string) {
 function Row({ label, value }: { label: string; value: string }) {
   if (!value) return null
   return (
-    <div className="flex flex-col gap-1 border-b border-border py-3 last:border-0 sm:flex-row sm:items-center sm:gap-4">
-      <dt className="w-full text-sm font-medium text-muted-foreground sm:w-1/2">{label}</dt>
-      <dd className="w-full text-sm font-semibold text-foreground sm:w-1/2 text-pretty">{value}</dd>
+    <div className="flex flex-row items-center gap-4 border-b border-border py-3 last:border-0">
+      <dt className="w-1/2 text-sm font-medium text-muted-foreground">{label}</dt>
+      <dd className="w-1/2 text-sm font-semibold text-foreground text-pretty">{value}</dd>
     </div>
   )
 }
