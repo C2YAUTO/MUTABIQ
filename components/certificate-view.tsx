@@ -3,10 +3,11 @@ import { CheckCircle2 } from "lucide-react"
 import type { Certificate } from "@/lib/db/schema"
 
 function Row({ label, value }: { label: string; value: string }) {
+  if (!value) return null
   return (
     <div className="flex flex-col gap-1 border-b border-border py-3 last:border-0 sm:flex-row sm:items-center sm:gap-4">
       <dt className="w-full text-sm font-medium text-muted-foreground sm:w-1/2">{label}</dt>
-      <dd className="w-full text-sm font-semibold text-foreground sm:w-1/2 text-pretty">{value || "—"}</dd>
+      <dd className="w-full text-sm font-semibold text-foreground sm:w-1/2 text-pretty">{value}</dd>
     </div>
   )
 }
@@ -66,10 +67,15 @@ export function CertificateView({ cert, qrDataUrl }: { cert: Certificate; qrData
 
       <div className="grid gap-6 md:grid-cols-2">
         <Section title="General information">
-          <Row label="Applicant" value={cert.applicant} />
+          <Row label="Certificate type" value={cert.certificateType} />
           <Row label="Manufacturer" value={cert.manufacturer} />
+          <Row label="Manufacturer address" value={cert.manufacturerAddress} />
+          <Row label="Manufacturer reference" value={cert.manufacturerRef} />
           <Row label="Country of origin" value={cert.countryOfOrigin} />
+          <Row label="Country of production" value={cert.countryOfProduction} />
           <Row label="Vehicle category" value={cert.vehicleCategory} />
+          <Row label="Vehicle type" value={cert.vehicleType} />
+          <Row label="Produced after" value={cert.producedAfter} />
         </Section>
 
         <Section title="Vehicle">
@@ -77,6 +83,10 @@ export function CertificateView({ cert, qrDataUrl }: { cert: Certificate; qrData
           <Row label="Model" value={cert.model} />
           <Row label="Model year" value={cert.modelYear} />
           <Row label="Color" value={cert.color} />
+          <Row label="Chassis / body type" value={cert.chassisBodyType} />
+          <Row label="Number of doors" value={cert.numDoors} />
+          <Row label="Number of seats" value={cert.numSeats} />
+          <Row label="Number of passengers" value={cert.numPassengers} />
         </Section>
 
         <Section title="Identification & engine">
@@ -85,6 +95,40 @@ export function CertificateView({ cert, qrDataUrl }: { cert: Certificate; qrData
           <Row label="Fuel type" value={cert.fuelType} />
           <Row label="Number of cylinders" value={cert.numberOfCylinders} />
           <Row label="Displacement" value={cert.engineCapacity} />
+          <Row label="Air intake" value={cert.airIntake} />
+          <Row label="Net engine power" value={cert.netEnginePower} />
+          <Row label="Engine RPM" value={cert.engineRpm} />
+          <Row label="Transmission" value={cert.transmission} />
+          <Row label="Pollutant limit" value={cert.pollutantLimit} />
+          <Row label="eCall SOS" value={cert.ecallSystem} />
+        </Section>
+
+        <Section title="Weights & dimensions">
+          <Row label="Max vehicle weight" value={cert.maxVehicleWeight} />
+          <Row label="Curb weight" value={cert.curbWeight} />
+          <Row label="Max axle (front)" value={cert.maxAxleFront} />
+          <Row label="Max axle (rear)" value={cert.maxAxleRear} />
+          <Row label="Length (mm)" value={cert.lengthMm} />
+          <Row label="Width (mm)" value={cert.widthMm} />
+          <Row label="Height (mm)" value={cert.heightMm} />
+          <Row label="Wheelbase (mm)" value={cert.wheelbaseMm} />
+          <Row label="Track (front)" value={cert.trackFront} />
+          <Row label="Track (rear)" value={cert.trackRear} />
+        </Section>
+
+        <Section title="Brakes">
+          <Row label="Service brakes" value={cert.serviceBrakes} />
+          <Row label="Emergency brakes" value={cert.emergencyBrakes} />
+        </Section>
+
+        <Section title="Fuel economy">
+          <Row label="Vehicle class" value={cert.fuelVehicleClass} />
+          <Row label="CAFE combined" value={cert.feCafeCombined} />
+          <Row label="Rating" value={cert.feRating} />
+        </Section>
+
+        <Section title="Technical regulations">
+          <Row label="Regulations" value={cert.techRegulations} />
         </Section>
 
         <Section title="Validity">
