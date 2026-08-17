@@ -3,9 +3,9 @@
 import { useTransition } from "react"
 import Link from "next/link"
 import type { Certificate } from "@/lib/db/schema"
-import { logoutAdmin } from "@/app/actions/admin"
+import { logoutAdmin, signOutEverywhere } from "@/app/actions/admin"
 import { Button } from "@/components/ui/button"
-import { CheckCircle2, XCircle, Plus, LogOut, Pencil, ExternalLink } from "lucide-react"
+import { CheckCircle2, XCircle, Plus, LogOut, Pencil, ExternalLink, ShieldX } from "lucide-react"
 
 export function AdminCertList({ certs }: { certs: Certificate[] }) {
   const [pending, startTransition] = useTransition()
@@ -25,6 +25,24 @@ export function AdminCertList({ certs }: { certs: Certificate[] }) {
               <Plus className="mr-1 h-4 w-4" />
               New certificate
             </Link>
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={pending}
+            onClick={() => {
+              if (
+                window.confirm(
+                  "Sign out of ALL devices and browsers? Every active admin session will be revoked and everyone will need to log in again.",
+                )
+              ) {
+                startTransition(async () => await signOutEverywhere())
+              }
+            }}
+          >
+            <ShieldX className="mr-1 h-4 w-4" />
+            Sign out everywhere
           </Button>
           <Button
             type="button"
