@@ -1,19 +1,21 @@
 import { cookies } from "next/headers"
-import { createHmac, timingSafeEqual, randomInt } from "crypto"
+import { createHmac, timingSafeEqual, randomBytes } from "crypto"
 import { db } from "@/lib/db"
-import { adminLoginCode } from "@/lib/db/schema"
-import { eq } from "drizzle-orm"
+import { adminSession, adminLoginAttempt } from "@/lib/db/schema"
+import { eq, lt } from "drizzle-orm"
 
 const COOKIE_NAME = "admin_session"
-const PENDING_COOKIE_NAME = "admin_2fa_pending"
-const CODE_TTL_MS = 10 * 60 * 1000 // 10 minutes
-const MAX_CODE_ATTEMPTS = 5
+const SESSION_TTL_MS = 8 * 60 * 60 * 1000 // 8 hours
+
+// Brute-force policy: after MAX_FAILED wrong passwords, block the IP for BLOCK_MS.
+const MAX_FAILED = 5
+const BLOCK_MS = 15 * 60 * 1000 // 15 minutes
+const ATTEMPT_WINDOW_MS = 15 * 60 * 1000 // failures older than this decay
 
 /**
  * Read an env var and normalise it: trim whitespace and strip a single layer
- * of matching surrounding quotes. Some env files store values as 'value' or
- * "value"; depending on how they are parsed the quotes may leak into the
- * runtime value, which would break exact string comparisons.
+ * of matching surrounding quotes. Depending on how the env file is parsed the
+ * quotes may leak into the runtime value, which would break comparisons.
  */
 function readEnv(name: string) {
   let v = process.env[name] ?? ""
@@ -32,12 +34,6 @@ function getSecret() {
   return readEnv("ADMIN_SESSION_SECRET") || "insecure-dev-secret-change-me"
 }
 
-// The signed token is a constant marker HMAC'd with the server secret.
-// Only someone who knows ADMIN_SESSION_SECRET can produce a valid token.
-function expectedToken() {
-  return createHmac("sha256", getSecret()).update("admin-authenticated").digest("hex")
-}
-
 function safeEqual(a: string, b: string) {
   const bufA = Buffer.from(a)
   const bufB = Buffer.from(b)
@@ -52,126 +48,111 @@ export function verifyPassword(password: string) {
   return safeEqual(password.trim(), expected)
 }
 
+/* -------------------------------------------------------------------------- */
+/* Sessions — unique, hashed, and revocable                                    */
+/* -------------------------------------------------------------------------- */
+
 const SESSION_COOKIE_OPTIONS = {
   httpOnly: true,
   secure: true,
   sameSite: "none" as const,
   path: "/",
-  maxAge: 60 * 60 * 8, // 8 hours
+  maxAge: SESSION_TTL_MS / 1000,
 }
 
-/** Cookie name + signed value + options, for setting directly on a Response. */
-export function getSessionCookie() {
-  return { name: COOKIE_NAME, value: expectedToken(), options: SESSION_COOKIE_OPTIONS }
+// The cookie holds a random secret; the database only stores its hash, so a
+// leaked database row can't be turned back into a working session token.
+function hashToken(token: string) {
+  return createHmac("sha256", getSecret()).update(`session:${token}`).digest("hex")
 }
 
-export async function createAdminSession() {
-  const cookieStore = await cookies()
-  cookieStore.set(COOKIE_NAME, expectedToken(), SESSION_COOKIE_OPTIONS)
+/**
+ * Create a brand-new unique session. Returns the cookie to set on the Response.
+ * Each login gets its own random token and database row.
+ */
+export async function createSessionCookie(userAgent = "") {
+  const token = randomBytes(32).toString("hex")
+  const expiresAt = new Date(Date.now() + SESSION_TTL_MS)
+  await db.insert(adminSession).values({
+    tokenHash: hashToken(token),
+    expiresAt,
+    userAgent: userAgent.slice(0, 300),
+  })
+  return { name: COOKIE_NAME, value: token, options: SESSION_COOKIE_OPTIONS }
 }
 
 export async function destroyAdminSession() {
   const cookieStore = await cookies()
+  const token = cookieStore.get(COOKIE_NAME)?.value
+  if (token) {
+    await db.delete(adminSession).where(eq(adminSession.tokenHash, hashToken(token)))
+  }
   cookieStore.delete(COOKIE_NAME)
+}
+
+/** Sign every admin out by deleting all sessions. */
+export async function revokeAllSessions() {
+  await db.delete(adminSession)
 }
 
 export async function isAdminAuthenticated() {
   const cookieStore = await cookies()
   const token = cookieStore.get(COOKIE_NAME)?.value
   if (!token) return false
-  return safeEqual(token, expectedToken())
-}
 
-/* -------------------------------------------------------------------------- */
-/* Two-factor authentication (one-time code by email)                          */
-/* -------------------------------------------------------------------------- */
-
-const PENDING_COOKIE_OPTIONS = {
-  httpOnly: true,
-  secure: true,
-  sameSite: "none" as const,
-  path: "/",
-  maxAge: 10 * 60, // matches the code TTL
-}
-
-function hashCode(code: string) {
-  return createHmac("sha256", getSecret()).update(`2fa:${code}`).digest("hex")
-}
-
-// Sign the pending-login row id so the client can't forge or swap it.
-function signPending(id: number) {
-  const sig = createHmac("sha256", getSecret()).update(`pending:${id}`).digest("hex")
-  return `${id}.${sig}`
-}
-
-function verifyPendingValue(value: string): number | null {
-  const [rawId, sig] = value.split(".")
-  const id = Number(rawId)
-  if (!rawId || !sig || !Number.isInteger(id)) return null
-  const expected = createHmac("sha256", getSecret()).update(`pending:${id}`).digest("hex")
-  if (!safeEqual(sig, expected)) return null
-  return id
-}
-
-/**
- * Create a fresh one-time code, store its hash in the database, and set a
- * signed pending cookie that links this browser to that code row.
- * Returns the plaintext code (to email) — it is never stored in the clear.
- */
-export async function startTwoFactor(): Promise<string> {
-  const code = String(randomInt(0, 1_000_000)).padStart(6, "0")
-  const expiresAt = new Date(Date.now() + CODE_TTL_MS)
   const [row] = await db
-    .insert(adminLoginCode)
-    .values({ codeHash: hashCode(code), expiresAt })
-    .returning({ id: adminLoginCode.id })
+    .select()
+    .from(adminSession)
+    .where(eq(adminSession.tokenHash, hashToken(token)))
+    .limit(1)
 
-  const cookieStore = await cookies()
-  cookieStore.set(PENDING_COOKIE_NAME, signPending(row.id), PENDING_COOKIE_OPTIONS)
-  return code
-}
-
-export async function hasPendingTwoFactor(): Promise<boolean> {
-  const cookieStore = await cookies()
-  const value = cookieStore.get(PENDING_COOKIE_NAME)?.value
-  if (!value) return false
-  return verifyPendingValue(value) !== null
-}
-
-export async function clearPendingTwoFactor() {
-  const cookieStore = await cookies()
-  cookieStore.delete(PENDING_COOKIE_NAME)
-}
-
-/**
- * Verify the submitted code against the pending login row.
- * Returns "ok" on success, otherwise a failure reason.
- */
-export async function verifyTwoFactorCode(
-  submitted: string,
-): Promise<"ok" | "expired" | "invalid" | "no-pending"> {
-  const cookieStore = await cookies()
-  const value = cookieStore.get(PENDING_COOKIE_NAME)?.value
-  if (!value) return "no-pending"
-  const id = verifyPendingValue(value)
-  if (id === null) return "no-pending"
-
-  const [row] = await db.select().from(adminLoginCode).where(eq(adminLoginCode.id, id)).limit(1)
-  if (!row || row.consumed) return "no-pending"
-
-  if (row.expiresAt.getTime() < Date.now() || row.attempts >= MAX_CODE_ATTEMPTS) {
-    await db.update(adminLoginCode).set({ consumed: true }).where(eq(adminLoginCode.id, id))
-    return "expired"
+  if (!row) return false
+  if (row.expiresAt.getTime() < Date.now()) {
+    // Clean up expired session lazily.
+    await db.delete(adminSession).where(eq(adminSession.id, row.id))
+    return false
   }
+  return true
+}
 
-  const code = submitted.trim()
-  const matches = code.length === 6 && safeEqual(hashCode(code), row.codeHash)
-  if (!matches) {
-    await db.update(adminLoginCode).set({ attempts: row.attempts + 1 }).where(eq(adminLoginCode.id, id))
-    return "invalid"
+/* -------------------------------------------------------------------------- */
+/* Brute-force protection — per-IP failed attempt tracking                     */
+/* -------------------------------------------------------------------------- */
+
+/** Returns how many seconds remain if this IP is currently blocked, else 0. */
+export async function getBlockedSeconds(ip: string): Promise<number> {
+  const [row] = await db.select().from(adminLoginAttempt).where(eq(adminLoginAttempt.ip, ip)).limit(1)
+  if (!row?.blockedUntil) return 0
+  const remaining = row.blockedUntil.getTime() - Date.now()
+  return remaining > 0 ? Math.ceil(remaining / 1000) : 0
+}
+
+/** Record a failed password attempt for an IP and block it once over the limit. */
+export async function recordFailedAttempt(ip: string) {
+  const now = Date.now()
+  const [row] = await db.select().from(adminLoginAttempt).where(eq(adminLoginAttempt.ip, ip)).limit(1)
+
+  // Decay old failures so an occasional typo months ago doesn't count forever.
+  const withinWindow = row && now - row.updatedAt.getTime() < ATTEMPT_WINDOW_MS
+  const failedCount = (withinWindow ? row!.failedCount : 0) + 1
+  const blockedUntil = failedCount >= MAX_FAILED ? new Date(now + BLOCK_MS) : null
+
+  if (row) {
+    await db
+      .update(adminLoginAttempt)
+      .set({ failedCount, blockedUntil, updatedAt: new Date(now) })
+      .where(eq(adminLoginAttempt.ip, ip))
+  } else {
+    await db.insert(adminLoginAttempt).values({ ip, failedCount, blockedUntil, updatedAt: new Date(now) })
   }
+}
 
-  // Success: burn the code so it can't be reused.
-  await db.update(adminLoginCode).set({ consumed: true }).where(eq(adminLoginCode.id, id))
-  return "ok"
+/** Clear the failure counter for an IP after a successful login. */
+export async function clearFailedAttempts(ip: string) {
+  await db.delete(adminLoginAttempt).where(eq(adminLoginAttempt.ip, ip))
+}
+
+/** Best-effort cleanup of expired sessions (safe to call opportunistically). */
+export async function pruneExpiredSessions() {
+  await db.delete(adminSession).where(lt(adminSession.expiresAt, new Date()))
 }

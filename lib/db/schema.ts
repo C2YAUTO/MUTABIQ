@@ -1,13 +1,22 @@
-import { pgTable, serial, text, timestamp, integer, boolean } from "drizzle-orm/pg-core"
+import { pgTable, serial, text, timestamp, integer } from "drizzle-orm/pg-core"
 
-// One-time login codes for admin two-factor authentication (sent by email).
-export const adminLoginCode = pgTable("admin_login_code", {
+// Revocable admin sessions: each login creates one unique row. Deleting a row
+// (or all rows) instantly invalidates that session / signs everyone out.
+export const adminSession = pgTable("admin_session", {
   id: serial("id").primaryKey(),
-  codeHash: text("code_hash").notNull(),
-  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
-  attempts: integer("attempts").notNull().default(0),
-  consumed: boolean("consumed").notNull().default(false),
+  tokenHash: text("token_hash").notNull().unique(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  lastSeenAt: timestamp("last_seen_at", { withTimezone: true }).notNull().defaultNow(),
+  userAgent: text("user_agent").notNull().default(""),
+})
+
+// Per-IP failed-login tracking for brute-force protection.
+export const adminLoginAttempt = pgTable("admin_login_attempt", {
+  ip: text("ip").primaryKey(),
+  failedCount: integer("failed_count").notNull().default(0),
+  blockedUntil: timestamp("blocked_until", { withTimezone: true }),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 })
 
 export const certificate = pgTable("certificate", {
