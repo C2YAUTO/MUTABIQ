@@ -71,7 +71,7 @@ export function CertificateView({ cert, qrDataUrl }: { cert: Certificate; qrData
 
       {/* Vehicle brand + model */}
       <div className="mb-6 rounded-lg bg-secondary px-6 py-8 text-center">
-        <p className="mb-3 text-2xl font-semibold text-secondary-foreground">Motor Vehicle</p>
+        <p className="mb-3 text-sm font-medium text-muted-foreground">Motor Vehicle</p>
         <p className="text-xl font-semibold uppercase tracking-wide text-secondary-foreground text-balance">
           {[cert.brand, cert.model].filter(Boolean).join(" ")}
         </p>
